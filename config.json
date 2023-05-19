@@ -1,0 +1,7 @@
+{
+    "listenAddress": "0.0.0.0",
+    "listenPort": 7110,
+    "idleTimeout": 300,
+    "password": "123456",
+    "method": "AES-256-CFB"
+}
