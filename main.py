@@ -2,6 +2,7 @@ import os
 import sys
 import asyncio
 import socket
+import selectors
 from loguru import logger
 from config import global_config
 from shadowsocks_srv import create_shadowsocks_srvs

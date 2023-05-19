@@ -263,8 +263,7 @@ class ShadowsocksServerTcp:
             self._on_connection,
             host=self._listen_addr,
             port=self._listen_port,
-            reuse_address=True,
-            reuse_port=True
+            reuse_address=True
         )
 
         # 等待停止事件
@@ -384,8 +383,7 @@ class ShadowsocksServerUdp:
         loop = asyncio.get_event_loop()
         self._transport, _ = await loop.create_datagram_endpoint(
             lambda: DatagramProtocol(self._on_datagram_local_received),
-            local_addr=(self._listen_addr, self._listen_port),
-            reuse_port=True
+            local_addr=(self._listen_addr, self._listen_port)
         )
 
         # 等待停止事件
