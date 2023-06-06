@@ -2,7 +2,7 @@ import asyncio
 import socket
 from loguru import logger
 from config import global_config
-from utils import gen_iv, gen_key, get_iv_len, get_key_len
+from utils import gen_iv, gen_key, get_iv_len, get_key_len, query_domain_ip
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from s5 import ss_parse_addr
 
@@ -39,9 +39,10 @@ class TcpNode:
         self._task_local = None
         self._task_remote = None
         self._last_interaction = asyncio.get_event_loop().time()
+        self._timeout_task = None
 
         if self._idle_timeout:
-            asyncio.create_task(self._timeout_check())
+            self._timeout_task = asyncio.create_task(self._timeout_check())
 
     async def _timeout_check(self):
         while True:
@@ -88,7 +89,9 @@ class TcpNode:
         except Exception:
             pass
 
-
+        if self._timeout_task:
+            self._timeout_task.cancel()
+            self._timeout_task = None
 
     # 处理握手阶段
     async def _stage_handshake(self) -> bool:
@@ -180,6 +183,7 @@ class TcpNode:
             except Exception as e:
                 break
 
+            self._last_interaction = asyncio.get_event_loop().time()
 
     # REMOTE
     async def _stage_remote_cycle(self) -> None:
@@ -206,8 +210,10 @@ class TcpNode:
             except Exception as e:
                 break
 
+            self._last_interaction = asyncio.get_event_loop().time()
 
     # 加密
+
     def _stream_encrypt(self, data: bytes) -> bytes:
         result = b''
 
@@ -310,29 +316,11 @@ class DatagramProtocol(asyncio.DatagramProtocol):
         self._local_addr = local_addr
         self._remote_addr = remote_addr
         self._idle_timeout = idle_timeout
-        self._last_interaction = asyncio.get_event_loop().time()
-
-        if self._idle_timeout:
-            asyncio.create_task(self._timeout_check())
-
-    async def _timeout_check(self):
-        while True:
-            current_time = asyncio.get_event_loop().time()
-            if current_time - self._last_interaction > self._idle_timeout:
-                self._close_callback(None)
-                self._close_transport()
-
-                break
-            await asyncio.sleep(1)  # 检查间隔
-
-    def update_interaction(self):
-        self._last_interaction = asyncio.get_event_loop().time()
 
     def connection_made(self, transport):
         self._transport = transport
 
     def datagram_received(self, data: bytes, addr: tuple):
-        self.update_interaction()
         self._msg_handler(data, addr, self)
 
     def error_received(self, exc):
@@ -416,6 +404,9 @@ class ShadowsocksServerUdp:
             logger.error(f'[ss] s5 parse failed[hdr:{hdr_len}] addr[{addr_s}] port[{port}]')
             return
 
+        domain = addr_s
+        addr_s = await query_domain_ip(domain)
+
         # gen map key
         link_key = f"{addr_c[0]}:{addr_c[1]}-{addr_s}:{port}"
         if link_key not in self._link_map:
@@ -429,7 +420,7 @@ class ShadowsocksServerUdp:
             self._link_map[link_key] = prot
             self._link_nums += 1
 
-            logger.info(f"[ss] udp {addr_c[0]}:{addr_c[1]} -> {addr_s}:{port}")
+            logger.info(f"[ss] udp {addr_c[0]}:{addr_c[1]} -> {domain}:{port}")
         else:
             transport = self._link_map[link_key].transport()
 

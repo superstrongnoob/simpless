@@ -1,12 +1,13 @@
-
+import socket
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from os import urandom
 import hashlib
+import aiodns
 
 
 
-__all__ = ['gen_iv', 'gen_key']
+__all__ = ['gen_iv', 'gen_key', 'query_domain_ip']
 
 METHODS = [
     {"cipher": "AES-128-CFB", "name": "AES-128-CFB", "key_len": 16, "iv_len": 16},
@@ -76,13 +77,31 @@ def gen_key(seed: str, key_len: int) -> bytes:
     return result
 
 
-# async def async_dns_query(domain: str, query_type: str = 'A') -> str:
-#     resolver = aiodns.DNSResolver()
-#     try:
-#         result = await resolver.query(domain, query_type)
-#         if result:
-#             return result[0].host
-#     except aiodns.error.DNSError as e:
-#         return None
+async def async_dns_query(domain: str, query_type: str = 'A') -> str:
+    resolver = aiodns.DNSResolver()
+    try:
+        result = await resolver.query(domain, query_type)
+        if result:
+            return result[0].host
+    except aiodns.error.DNSError as e:
+        return None
 
+async def query_domain_ip(domain: str) -> str:
+    try:
+        socket.inet_pton(socket.AF_INET, domain)
+        return domain
+    except socket.error:
+        pass
+
+    try:
+        socket.inet_pton(socket.AF_INET6, domain)
+        return domain
+    except socket.error:
+        pass
+
+    ret = await async_dns_query(domain)
+    if not ret:
+        ret = "127.0.0.1"
+
+    return ret
 
